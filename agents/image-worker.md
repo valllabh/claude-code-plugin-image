@@ -35,13 +35,15 @@ force:     <optional, true to bypass cache and regenerate. Default: false.>
 
 One file per image at `<cache_dir>/<id>.md`. No index. No other files. The cache directory is its own index.
 
-Compute id by sha256 of bytes. Try in order, take the first that works:
+Compute id by sha256 of bytes. **Always quote paths in shell commands** because screenshot filenames often contain spaces. Try in order, take the first that works:
 
 ```
-sha256sum <path>                        # linux, git bash
-shasum -a 256 <path>                    # macos
-python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' <path>
+sha256sum "<path>"                        # linux, git bash
+shasum -a 256 "<path>"                    # macos
+python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "<path>"
 ```
+
+Before computing, if you are unsure the file exists, run `ls -la "<path>"` and surface the error if missing. Do not invent an id.
 
 File shape:
 
