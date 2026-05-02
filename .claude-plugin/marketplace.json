@@ -1,0 +1,17 @@
+{
+  "name": "claude-code-plugin-image",
+  "owner": {
+    "name": "valllabh",
+    "url": "https://github.com/valllabh"
+  },
+  "plugins": [
+    {
+      "name": "image",
+      "source": "./",
+      "description": "Work with images without loading pixels into the main agent context. WebFetch shaped: pass a path and an intent, get text back. Backed by a configurable subagent and a per image markdown memory cache.",
+      "version": "0.1.0",
+      "homepage": "https://github.com/valllabh/claude-code-plugin-image",
+      "keywords": ["image", "vision", "context", "subagent", "cache"]
+    }
+  ]
+}

@@ -46,13 +46,21 @@ Skip it when:
 
 Works on macOS, Linux, and Windows (WSL or Git Bash). Needs `sha256sum`, `shasum`, or `python3` on PATH (all three ship by default on the supported platforms).
 
+Inside Claude Code:
+
+```
+/plugin install valllabh/claude-code-plugin-image
+```
+
+Or from a local clone:
+
 ```bash
 git clone https://github.com/valllabh/claude-code-plugin-image.git
 cd claude-code-plugin-image
 make link
 ```
 
-Restart Claude Code. From then on, when the user asks about an image, Claude Code routes the question through `Image(path, intent)` automatically. To remove: `make unlink`.
+Restart Claude Code. From then on, when the user asks about an image, Claude Code routes the question through `Image(path, intent)` automatically. To remove via slash: `/plugin uninstall image`. From a local clone: `make unlink`.
 
 ## How it works
 
