@@ -47,6 +47,42 @@ make unlink    remove the symlink
 
 Evals are run by an agent inside a Claude Code session against `evals/MANIFEST.md`. There is no external test runner. Failing rows feed the next prompt iteration.
 
+## Plugin authoring reference
+
+Authoritative answers from the Claude Code docs, captured here so we do not re-research them.
+
+**Manifest files**
+- `.claude-plugin/marketplace.json` is REQUIRED for `/plugin marketplace add` to work. Required fields: `name`, `owner`, `plugins`. Each plugin entry needs `name` and `source`. Optional: `version`, `ref`, `sha`, `description`, `homepage`, `keywords`.
+- `.claude-plugin/plugin.json` is OPTIONAL but recommended. If present, only `name` is required. Optional: `version`, `description`, `author`, `homepage`, `repository`, `license`, plus component path overrides.
+- Docs: https://code.claude.com/docs/en/plugins-reference.md
+
+**Component locations** (live at plugin root, NOT under `.claude-plugin/`)
+- Skills: `skills/<name>/SKILL.md`. Required frontmatter: `description`. Optional: `disable-model-invocation`.
+- Subagents: `agents/<name>.md`. Frontmatter: `name`, `description`, `model`, `effort`, `maxTurns`, `disallowedTools`, `skills`, `memory`, `background`, `isolation`.
+- Hooks: `hooks/hooks.json` with event matchers like `PreToolUse`, `PostToolUse`.
+- MCP / LSP servers: `.mcp.json` / `.lsp.json`.
+- Monitors: `monitors/monitors.json`.
+
+**Subagent `model:` values**
+- `inherit` (default, uses calling session's model)
+- aliases: `haiku`, `sonnet`, `opus`
+- full ids: `claude-opus-4-7`, `claude-haiku-4-5`, etc.
+- Docs: https://code.claude.com/docs/en/sub-agents.md
+
+**Install flow users run**
+1. `/plugin marketplace add <owner/repo|url|path>` Claude Code fetches `marketplace.json` and caches it.
+2. `/plugin install <plugin-name>@<marketplace-name>` clones to `~/.claude/plugins/cache/<id>/`.
+3. Components activate immediately. No restart required.
+4. `/plugin update` is offered when `version:` in plugin.json is bumped.
+
+**Versioning**
+- Set `version: "x.y.z"` in plugin.json (semver). Bump on any user visible change. Skip the bump and Claude Code uses the git SHA as the version (one new version per commit, useful for dev).
+- Docs: https://code.claude.com/docs/en/plugins-reference.md#version-management
+
+**Local dev shortcut**
+- `make link` symlinks the repo to `~/.claude/plugins/image` so edits show up without going through the marketplace flow.
+- Use `/reload-plugins` to pick up changes mid session when running with `--plugin-dir`.
+
 ## What not to do
 
 - Do not call `Read` on an image directly from the main agent. Always go through the skill.
