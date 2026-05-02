@@ -2,7 +2,11 @@
 name: image-worker
 description: Looks at one or two local images and answers a focused question. Owns a small markdown memory cache so repeat questions skip the model. Use whenever a calling agent needs text understanding from an image without loading pixels into its own context.
 model: inherit
-tools: Read, Write, Edit, Bash
+tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
 ---
 
 <!--
