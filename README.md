@@ -4,7 +4,7 @@ Let Claude Code work with images without burning your context window.
 
 ## What it does
 
-Pass an image path and what you want to know. Get text back. Your main session never holds the pixels.
+Pass an image path and what you want to know. Get text back. Your main session never holds the pixels. By default the worker uses the same model as your session, but you can dial it down to Haiku in one line for cheap, fast image work.
 
 ```
 Image("err.png", "what error is shown")
@@ -13,7 +13,7 @@ Image("design.png", "list the UI sections")
 Image("a.png", "diff against b.png")
 ```
 
-Same shape as Claude Code's built in `WebFetch(url, prompt)`. A small fast model (Haiku) looks at the image, runs your question, returns plain text. Your context only sees the answer.
+Same shape as Claude Code's built in `WebFetch(url, prompt)`. A subagent looks at the image, runs your question, returns plain text. Your context only sees the answer.
 
 ## Why it matters
 
@@ -59,7 +59,7 @@ Restart Claude Code. From then on, when the user asks about an image, Claude Cod
 Two pieces:
 
 - `skills/image/SKILL.md`  the recipe the main agent follows. Tiny: hand the path and intent to the worker, return the worker's text.
-- `agents/image-worker.md`  the Haiku subagent that actually looks at the image and owns a small markdown cache.
+- `agents/image-worker.md`  the subagent that actually looks at the image and owns a small markdown cache. Model is configurable via the `model:` line in its frontmatter. Default `inherit` (use the session's model). Set to `haiku` for the cheapest, fastest path.
 
 The cache lives at `~/.claude/cache/image-memory/<id>.md`, one file per unique image (id is sha256 of bytes). Each file has a `## profile` block written once (text, summary, kind, dims, elements) and a `## answers` log appended over time. Common questions get answered straight from the profile without re-reading the image. There is no index file. The cache directory is its own index.
 

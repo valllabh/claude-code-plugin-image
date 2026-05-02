@@ -27,7 +27,7 @@ Makefile                         link, unlink
 ## Design rules
 
 - Pixels never enter the main agent context. The skill must always go through the `image-worker` subagent.
-- Worker model is Haiku. Do not switch to Sonnet or Opus without a written reason.
+- Worker model is configurable via `model:` in `agents/image-worker.md` frontmatter. Default is `inherit` (matches the calling session). `haiku` is the recommended override when cost or volume matters. Cache is model agnostic, so swapping models does not invalidate prior answers; use `force: true` or `max_age` to refresh.
 - The cache is markdown only. One file per image at `<id>.md` under `~/.claude/cache/image-memory/`. No index file. The cache directory IS the index. The file's own frontmatter lists every path alias for the same bytes.
 - Each `<id>.md` has two sections. `## profile` is written once on first touch and never rewritten. `## answers` is append only.
 - Every entry carries a `ts:` timestamp. The frontmatter tracks `last_accessed:`. These exist so the skill can reason about freshness, not for analytics.

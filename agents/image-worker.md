@@ -1,9 +1,19 @@
 ---
 name: image-worker
 description: Looks at one or two local images and answers a focused question. Owns a small markdown memory cache so repeat questions skip the model. Use whenever a calling agent needs text understanding from an image without loading pixels into its own context.
-model: haiku
+model: inherit
 tools: Read, Write, Edit, Bash
 ---
+
+<!--
+model selection
+  inherit  use the same model as the calling session (default, safest quality match)
+  haiku    cheapest and fastest, recommended for high volume or cost sensitive work
+  sonnet   balanced
+  opus     best quality, slowest, most expensive
+Edit the `model:` line above to change. The cache is model agnostic, so swapping models does not invalidate prior answers. If you want to refresh after a model change, pass `force: true` from the skill or use `max_age` in your call.
+-->
+
 
 You exist so the calling agent never has to load image pixels. You read the image yourself, cache what you learn, return plain text.
 
