@@ -26,46 +26,79 @@ There is no equivalent for images. This plugin fills that gap.
 A single skill, `image`, with one shape:
 
 ```
-image(path, intent)
+Image(path, intent)
 ```
 
 Where `intent` is a free form instruction, the same way a `WebFetch` prompt is free form. Examples:
 
-- `image("err.png", "extract every word of visible text")`
-- `image("ui.png", "list UI components and their rough positions")`
-- `image("chart.png", "give me the data as a markdown table")`
-- `image("a.png", "diff against b.png")`
-- `image("design.png", "critique the visual hierarchy")`
-- `image("screen.png", "what error or state is shown")`
+- `Image("err.png", "extract every word of visible text")`
+- `Image("ui.png", "list UI components and their rough positions")`
+- `Image("chart.png", "give me the data as a markdown table")`
+- `Image("a.png", "diff against b.png")`
+- `Image("design.png", "critique the visual hierarchy")`
+- `Image("screen.png", "what error or state is shown")`
 
 Under the hood the skill spawns a Haiku worker. The worker loads the image, runs the intent, and returns text. The main agent context never sees the pixels.
 
 ## Cache
 
-A naive `(path, intent) -> answer` cache is too narrow. The same image gets asked many different questions over time, and recomputing each one wastes tokens.
-
-The cache is layered as an image profile, written once per image and grown over use:
+Markdown only. Two pieces: an `index.md` for cross image lookup, and one `<sha>.md` per image.
 
 ```
-~/.claude/cache/image-profiles/<sha256>.md
+~/.claude/cache/image-memory/
+  index.md             one row per image
+  <sha256>.md          per image memory
 ```
 
-Each profile holds facets:
+`index.md` is a single markdown table. Linear scan is fine at the scales this cache operates at (hundreds, low thousands of images).
 
-- `text`     every word visible, OCR style dump
-- `structure`     outline, headings, UI tree, table cells
-- `elements`     components or objects with rough regions
-- `metadata`     dimensions, type, dominant colors
-- `summary`     short semantic gist
-- `answers`     log of past `(intent, answer)` pairs
-- `source`     original path
+```
+| sha | sources | kind | dims | created | tags |
+|-----|---------|------|------|---------|------|
+| ... | ...     | ...  | ...  | ...     | ...  |
+```
+
+Per image file has a fixed shape:
+
+```
+---
+source(s):
+  - /absolute/path/one.png
+  - /absolute/path/two.png
+sha256: ...
+created: ...
+---
+
+## profile         (written once on first touch, never rewritten)
+text:     every visible word, OCR style
+summary:  one paragraph
+kind:     screenshot | photo | diagram | chart | mockup | other
+dims:     WxH
+elements: short list of salient regions
+
+## answers         (append only)
+### intent: <intent string>
+<answer>
+
+### intent: <intent string>
+<answer>
+```
 
 Routing on a new call:
 
-1. Hash the image bytes.
-2. If a profile exists, try to answer the intent from the relevant facet, or from a past answer.
-3. If the intent needs pixels (spatial precision, novel question), spawn the Haiku worker, return the answer, and append it to `answers`.
-4. The profile gets smarter the more it is used.
+1. Hash the image bytes. Add the path to `sources` in `index.md` if new.
+2. If the `<sha>.md` file is missing or has no `## profile` section, spawn the worker once to populate `## profile`. Pays for itself across all future questions on this image.
+3. Try to answer the intent from `## profile`. Most "what text", "what kind", "summarize" intents resolve here with no model call.
+4. Else search `## answers` for a normalized match on the intent string. Hook for embeddings later.
+5. Else spawn the worker. Append a new `### intent` block to `## answers`.
+
+Why this shape:
+
+- Markdown loads natively into the agent. No parser, no schema, no dependency.
+- Same bytes at multiple paths share one memory file. Key is sha, not path.
+- `## profile` carries canonical facets, so paraphrased questions hit cache instead of respawning the worker.
+- `## answers` is append only. No rewrites means concurrent worker writes are safe enough for a single user local cache.
+- Every piece is human inspectable and hand editable when something goes wrong.
 
 ## How This Addresses the Problem
 
@@ -75,6 +108,34 @@ Routing on a new call:
 - The main agent context window is preserved for the actual coding task.
 - The cache compounds value across sessions, not just within one.
 
+## Install
+
+Requires Claude Code. macOS, Linux, or Windows (WSL or Git Bash). Python 3.7 or newer is recommended for the cache helper. The worker falls back to `sha256sum` or `shasum` if Python is unavailable.
+
+```bash
+git clone https://github.com/valllabh/claude-code-plugin-image.git
+cd claude-code-plugin-image
+make link        # symlinks repo into ~/.claude/plugins/image
+```
+
+Restart Claude Code so the new skill and subagent are picked up. After that, the main agent will route any image question through `Image(path, intent)` automatically. To remove: `make unlink`.
+
+## Layout
+
+```
+.claude-plugin/plugin.json   plugin manifest
+skills/image/SKILL.md        the skill the main agent invokes
+agents/image-worker.md       Haiku subagent that loads pixels and manages the cache
+scripts/image_cache.py       cross platform helper for sha256, paths, index ops
+evals/MANIFEST.md            test cases the agent can run inside Claude Code
+Makefile                     link / unlink
+CLAUDE.md                    project rules for any session working in this repo
+```
+
+## Evals
+
+See `evals/MANIFEST.md`. The eval loop is itself agent driven: a Claude Code session walks the test rows, invokes `Image(path, intent)`, and writes results to `evals/runs/<timestamp>.md`. One of the loops uses `agent-browser` to take a fresh screenshot of an unfamiliar page, then asks the skill about it, exercising the skill against truly novel input.
+
 ## Status
 
-Scaffold only. Skill definition and worker prompt live under `skills/image/`.
+End to end working with cache. Cold and warm paths verified on real screenshots. Iterating on prompt clarity and eval coverage.

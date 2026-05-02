@@ -1,0 +1,12 @@
+{
+  "name": "image",
+  "version": "0.1.0",
+  "description": "Work with images without loading pixels into the main agent context. WebFetch shaped: pass a path and an intent, get text back. Backed by a Haiku worker and a per image text memory.",
+  "author": {
+    "name": "valllabh"
+  },
+  "homepage": "https://github.com/valllabh/claude-code-plugin-image",
+  "repository": "https://github.com/valllabh/claude-code-plugin-image",
+  "license": "MIT",
+  "keywords": ["image", "vision", "context", "haiku", "subagent", "cache"]
+}
