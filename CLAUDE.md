@@ -14,7 +14,6 @@ Read `README.md` for the full problem statement and design rationale before chan
 .claude-plugin/plugin.json       plugin manifest
 skills/image/SKILL.md            the skill the main agent invokes
 agents/image-worker.md           Haiku subagent that loads pixels and owns the cache
-scripts/image_cache.py           cross platform helper for sha256, paths, index ops
 evals/MANIFEST.md                test cases for an in-session agent runner
 Makefile                         link, unlink
 ```
@@ -29,10 +28,10 @@ Makefile                         link, unlink
 
 - Pixels never enter the main agent context. The skill must always go through the `image-worker` subagent.
 - Worker model is Haiku. Do not switch to Sonnet or Opus without a written reason.
-- The cache is markdown only. `index.md` for cross image lookup, one `<sha>.md` per image. No sqlite, no yaml, no jsonl. Markdown loads natively and is hand editable.
-- Each `<sha>.md` has two sections. `## profile` is written once on first touch and never rewritten. `## answers` is append only.
-- Lookups consult `## profile` first (cheap, no model call), then `## answers`, then spawn the worker as a last resort.
-- Cross image queries scan `index.md`. Never walk the directory tree.
+- The cache is markdown only. One file per image at `<id>.md` under `~/.claude/cache/image-memory/`. No index file. The cache directory IS the index. The file's own frontmatter lists every path alias for the same bytes.
+- Each `<id>.md` has two sections. `## profile` is written once on first touch and never rewritten. `## answers` is append only.
+- Lookups consult `## profile` first (cheap, no model call), then `## answers`, then read the image as a last resort.
+- Do not introduce an index file. If cross image queries become a real need, add it then. Premature now.
 - Two image comparisons share one memory file, keyed off the first image. Reference the second image by path inside the answer.
 
 ## Build, run, test

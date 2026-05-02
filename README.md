@@ -87,11 +87,11 @@ elements: short list of salient regions
 
 Routing on a new call (executed by the `image-worker` subagent, not the main agent):
 
-1. Compute the id via `scripts/image_cache.py id <path>`. Falls back to `sha256sum`, `shasum`, or `node` if Python is missing.
-2. Register the path in `index.md` via `image_cache.py register`. Same bytes seen at a new path just appends to the existing row's sources cell.
-3. If the `<id>.md` file is missing or has no `## profile` section, read the image once and write the canonical profile.
+1. Compute the id by sha256 of bytes. Worker tries `sha256sum`, `shasum`, then `python3 -c ...` inline. No external script.
+2. If the `<id>.md` file is missing or has no `## profile` section, read the image once and write the canonical profile.
+3. If it exists but the calling path is not in the `sources:` list, append it to the frontmatter.
 4. Try to answer the intent from `## profile`. Most "what text", "what kind", "summarize", "what dims" intents resolve here with no model call.
-5. Else search `## answers` for a normalized substring match on the intent string. Hook for embeddings later.
+5. Else search `## answers` for a normalized substring match on the intent string.
 6. Else read the image, answer, and append a new `### intent` block to `## answers`.
 
 Why this shape:
@@ -112,7 +112,7 @@ Why this shape:
 
 ## Install
 
-Requires Claude Code. macOS, Linux, or Windows (WSL or Git Bash). Python 3.7 or newer is recommended for the cache helper. The worker falls back to `sha256sum` or `shasum` if Python is unavailable.
+Requires Claude Code. macOS, Linux, or Windows (WSL or Git Bash). Worker uses any of `sha256sum`, `shasum`, or `python3` for content hashing, so at least one of those needs to be on PATH. All three ship by default on the supported platforms.
 
 ```bash
 git clone https://github.com/valllabh/claude-code-plugin-image.git
@@ -128,7 +128,6 @@ Restart Claude Code so the new skill and subagent are picked up. After that, the
 .claude-plugin/plugin.json   plugin manifest
 skills/image/SKILL.md        the skill the main agent invokes
 agents/image-worker.md       Haiku subagent that loads pixels and manages the cache
-scripts/image_cache.py       cross platform helper for sha256, paths, index ops
 evals/MANIFEST.md            test cases the agent can run inside Claude Code
 Makefile                     link / unlink
 CLAUDE.md                    project rules for any session working in this repo
