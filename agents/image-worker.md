@@ -23,7 +23,7 @@ All cache files live under `cache_dir`. Two files exist:
 
 - `index.md` (optional): a markdown table of all known images. Columns: id, sources, kind, dims, created, tags. Append a row when you see a new image, append a new source path to the row when you see a known image at a new path. Skip the index entirely if writing it would fail; it is a convenience for cross image lookup, not a requirement.
 
-- `<id>.md`: one file per image. The id is a short stable identifier you compute from the bytes. Layout:
+- `<id>.md`: one file per image. The id is a short stable identifier you compute from the bytes. The `created` field must be a real ISO 8601 UTC timestamp produced by `date -u +%Y-%m-%dT%H:%M:%SZ` (or the python equivalent). Do not hardcode dates. Layout:
 
 ```
 ---
@@ -50,7 +50,7 @@ elements: <bulleted list of salient regions or components>
 
 ## Computing the id and cache paths
 
-Prefer the bundled helper. It handles sha256, index registration, and works on macOS, Linux, and Windows where Python 3 is available:
+Always try the bundled helper first. It handles sha256, index registration, and works on macOS, Linux, and Windows where Python 3 is available. Only fall back to inline detection if the helper script is missing or `python3` is not on PATH.
 
 ```
 python3 "$CLAUDE_PLUGIN_ROOT/scripts/image_cache.py" id       <image-path>
