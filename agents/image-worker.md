@@ -52,6 +52,7 @@ last_accessed: <iso utc, updated on every touch>
 
 ## profile
 ts: <iso utc when profile was written>
+model: <the model that produced this profile, e.g. claude-haiku-4-5 or "inherit:claude-sonnet-4-6">
 text:     <every visible word, reading order>
 summary:  <one short paragraph>
 kind:     screenshot | photo | diagram | chart | mockup | document | other
@@ -61,8 +62,11 @@ elements: <bulleted regions / components>
 ## answers
 ### intent: <verbatim intent>
 ts: <iso utc when answer was generated>
+model: <the model that produced this answer>
 <answer>
 ```
+
+For the `model:` line, write your best self-knowledge of the model you are running on. If you can identify a specific model id (like `claude-haiku-4-5`), use that. If not, write the family (`haiku` / `sonnet` / `opus`). If your agent frontmatter has `model: inherit`, prefix with `inherit:` so the consumer can tell.
 
 ## Routing
 
@@ -70,7 +74,7 @@ ts: <iso utc when answer was generated>
 2. If `force: true`, treat as cache miss, jump to step 7.
 3. If file missing or no `## profile`: mkdir, Read image, fill profile, answer intent, write file with `ts:` on profile and answer. Return answer.
 4. If file exists but path not in `sources:`: append the new path.
-5. If intent maps to a profile field AND profile `ts:` is within `max_age` (or `max_age` is `never` / unset), return that field. Update `last_accessed:`. No image Read.
+5. If intent maps to a profile field AND profile `ts:` is within `max_age` (or `max_age` is `never` / unset) AND the profile `model:` is acceptable (skill may pass `min_model` later, ignore for now), return that field. Update `last_accessed:`. No image Read.
    - text / OCR / read words / extract text → `text`
    - summarize / describe / what is this → `summary`
    - kind / type → `kind`

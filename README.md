@@ -63,7 +63,7 @@ Two pieces:
 
 The cache lives at `~/.claude/cache/image-memory/<id>.md`, one file per unique image (id is sha256 of bytes). Each file has a `## profile` block written once (text, summary, kind, dims, elements) and a `## answers` log appended over time. Common questions get answered straight from the profile without re-reading the image. There is no index file. The cache directory is its own index.
 
-Every entry carries a `ts:` timestamp and the file tracks `last_accessed:`. The skill accepts an optional `max_age:` (e.g. `1h`, `7d`, `never`) and a `force:` flag, so time sensitive questions or model upgrades can bypass stale answers. Default is `never` because most images are static (a screenshot from yesterday is the same screenshot today).
+Every entry carries a `ts:` timestamp and a `model:` line recording which model produced it, plus the file tracks `last_accessed:`. The skill accepts an optional `max_age:` (e.g. `1h`, `7d`, `never`) and a `force:` flag, so time sensitive questions or model upgrades can bypass stale answers. Default is `never` because most images are static (a screenshot from yesterday is the same screenshot today). Tracking the model per entry means you can later decide "regenerate anything that came from Haiku now that I am on Opus" without throwing the whole cache away.
 
 For full design notes including the why behind each choice, see `CLAUDE.md`.
 
