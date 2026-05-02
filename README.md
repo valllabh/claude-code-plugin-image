@@ -1,180 +1,81 @@
 # claude-code-plugin-image
 
-A Claude Code plugin that lets the main agent work with images without loading pixels into its own context. Modeled after `WebFetch`: pass a path and an intent, get text back.
+Let Claude Code work with images without burning your context window.
 
-## The Problem
+## What it does
 
-When Claude Code reads an image with the `Read` tool, the pixels enter the main conversation context. Each image consumes roughly 1000 to 1500 tokens, and large or numerous images push the session toward its context limit fast. Once an image is in context there is no clean way to evict it short of full compaction.
-
-Observed pain in the wild:
-
-- anthropics/claude-code#37461  Need ability to selectively remove images from context without full compaction
-- anthropics/claude-code#25813  Image context handling causes premature context limit exceeded errors
-- anthropics/claude-code#22374  Infinite retry loop in many image context
-- anthropics/claude-code#14483  PDF with many images keeps context history bloated
-
-The deeper issue is not just bloat. The main agent ends up doing every kind of image work itself: reading text, locating elements, extracting tables, classifying, comparing. Each of those is a focused task that a smaller, faster model can handle in isolation and return as plain text.
-
-## The Pattern Already Exists for the Web
-
-`WebFetch(url, prompt)` does not put HTML into the main context. It hands the URL and prompt to a small, fast model, which loads the bytes, runs the prompt, and returns text. The main agent only sees the answer.
-
-There is no equivalent for images. This plugin fills that gap.
-
-## The Solution
-
-A single skill, `image`, with one shape:
+Pass an image path and what you want to know. Get text back. Your main session never holds the pixels.
 
 ```
-Image(path, intent)
+Image("err.png", "what error is shown")
+Image("chart.png", "give me the data as a table")
+Image("design.png", "list the UI sections")
+Image("a.png", "diff against b.png")
 ```
 
-Where `intent` is a free form instruction, the same way a `WebFetch` prompt is free form. Examples:
+Same shape as Claude Code's built in `WebFetch(url, prompt)`. A small fast model (Haiku) looks at the image, runs your question, returns plain text. Your context only sees the answer.
 
-- `Image("err.png", "extract every word of visible text")`
-- `Image("ui.png", "list UI components and their rough positions")`
-- `Image("chart.png", "give me the data as a markdown table")`
-- `Image("a.png", "diff against b.png")`
-- `Image("design.png", "critique the visual hierarchy")`
-- `Image("screen.png", "what error or state is shown")`
+## Why it matters
 
-Under the hood the skill spawns a Haiku worker. The worker loads the image, runs the intent, and returns text. The main agent context never sees the pixels.
+Reading an image directly puts ~1000 to 1700 tokens of pixel data into your main context, and it stays there for the whole session. Open ten screenshots in one task and you have lost a third of your context window before you have done any work.
 
-## Cache
+| approach | tokens added to your main context | sticks around |
+|---|---|---|
+| `Read` an image directly | 1000 to 1700 | yes, for the rest of the session |
+| `Image(path, intent)` | 50 to 300 (just the answer) | yes, but cheap |
+| `Image(path, intent)` again on the same image | 50 to 300 | served from cache, no model call |
 
-Markdown only. Two pieces: an `index.md` for cross image lookup, and one `<sha>.md` per image.
+Rule of thumb: at two or more images in a session, this plugin pays for itself. At ten, it is the difference between finishing the task and hitting context limits.
 
-```
-~/.claude/cache/image-memory/
-  index.md             one row per image
-  <id>.md              per image memory (id is sha256 of bytes by default)
-```
+## When to use it
 
-`index.md` is a single markdown table. Linear scan is fine at the scales this cache operates at (hundreds, low thousands of images).
+Reach for `Image(...)` whenever you would otherwise call `Read` on an image:
 
-```
-| id | sources | kind | dims | created | tags |
-|----|---------|------|------|---------|------|
-| ...| ...     | ...  | ...  | ...     | ...  |
-```
+- Many screenshots in one session.
+- One screenshot you keep coming back to with new questions.
+- Long sessions where context is precious.
+- The user wants text understanding, not pixel level judgement.
 
-Per image file has a fixed shape:
+Skip it when:
 
-```
----
-id: <sha256 hex>
-sources:
-  - /absolute/path/one.png
-  - /absolute/path/two.png
-created: <iso 8601 utc>
-id_method: <only set when worker fell back from python helper>
----
-
-## profile         (written once on first touch, never rewritten)
-text:     every visible word, OCR style
-summary:  one paragraph
-kind:     screenshot | photo | diagram | chart | mockup | other
-dims:     WxH
-elements: short list of salient regions
-
-## answers         (append only)
-### intent: <intent string>
-<answer>
-
-### intent: <intent string>
-<answer>
-```
-
-Routing on a new call (executed by the `image-worker` subagent, not the main agent):
-
-1. Compute the id by sha256 of bytes. Worker tries `sha256sum`, `shasum`, then `python3 -c ...` inline. No external script.
-2. If the `<id>.md` file is missing or has no `## profile` section, read the image once and write the canonical profile.
-3. If it exists but the calling path is not in the `sources:` list, append it to the frontmatter.
-4. Try to answer the intent from `## profile`. Most "what text", "what kind", "summarize", "what dims" intents resolve here with no model call.
-5. Else search `## answers` for a normalized substring match on the intent string.
-6. Else read the image, answer, and append a new `### intent` block to `## answers`.
-
-Why this shape:
-
-- Markdown loads natively into the agent. No parser, no schema, no dependency.
-- Same bytes at multiple paths share one memory file. Key is sha, not path.
-- `## profile` carries canonical facets, so paraphrased questions hit cache instead of respawning the worker.
-- `## answers` is append only. No rewrites means concurrent worker writes are safe enough for a single user local cache.
-- Every piece is human inspectable and hand editable when something goes wrong.
-
-## How This Addresses the Problem
-
-- Pixels stay out of the main context. Only text answers come back.
-- Many small focused calls cost less than one large general call, because Haiku handles the pixel work.
-- Repeat questions on the same image hit the cache and skip the model entirely.
-- The main agent context window is preserved for the actual coding task.
-- The cache compounds value across sessions, not just within one.
-
-## When To Use It vs Just `Read`
-
-The plugin is only worth invoking when the win is real. Concretely:
-
-| approach | tokens added to MAIN context per image | persists in main context |
-|----------|----------------------------------------|--------------------------|
-| `Read` image directly | ~1000 to 1700 (vision tier dependent) | yes, for the rest of the session |
-| `Image(path, intent)` cold | ~50 to 300 (the text answer only) | yes, but cheap text |
-| `Image(path, intent)` warm cache hit | ~50 to 300 | yes, but cheap text |
-
-The worker has its own context overhead per call (~20 to 25 thousand tokens of system prompt and tool definitions, billed separately on Haiku). That cost is real but isolated from the main agent.
-
-Use the plugin when:
-
-- Multiple images in one session.
-- One image with multiple questions over time.
-- Long sessions where main context is the scarce resource.
-- The user needs text understanding, not pixel precise reasoning.
-
-Skip the plugin when:
-
-- Single image, single throwaway question, short session.
-- The user explicitly asks you to look at the image yourself.
-- The task needs sub pixel localization or detailed visual judgement that a text answer cannot capture.
-
-Net rule of thumb: at two or more images in a session, the plugin pays for itself. At ten images, it is the difference between finishing the task and hitting context limits.
+- A single throwaway question on a single image.
+- The user explicitly says to look at the image yourself.
+- You need pixel precise reasoning that a text answer cannot capture.
 
 ## Install
 
-Requires Claude Code. macOS, Linux, or Windows (WSL or Git Bash). Worker uses any of `sha256sum`, `shasum`, or `python3` for content hashing, so at least one of those needs to be on PATH. All three ship by default on the supported platforms.
+Works on macOS, Linux, and Windows (WSL or Git Bash). Needs `sha256sum`, `shasum`, or `python3` on PATH (all three ship by default on the supported platforms).
 
 ```bash
 git clone https://github.com/valllabh/claude-code-plugin-image.git
 cd claude-code-plugin-image
-make link        # symlinks repo into ~/.claude/plugins/image
+make link
 ```
 
-Restart Claude Code so the new skill and subagent are picked up. After that, the main agent will route any image question through `Image(path, intent)` automatically. To remove: `make unlink`.
+Restart Claude Code. From then on, when the user asks about an image, Claude Code routes the question through `Image(path, intent)` automatically. To remove: `make unlink`.
 
-## Layout
+## How it works
 
-```
-.claude-plugin/plugin.json   plugin manifest
-skills/image/SKILL.md        the skill the main agent invokes
-agents/image-worker.md       Haiku subagent that loads pixels and manages the cache
-evals/MANIFEST.md            test cases the agent can run inside Claude Code
-Makefile                     link / unlink
-CLAUDE.md                    project rules for any session working in this repo
-```
+Two pieces:
+
+- `skills/image/SKILL.md`  the recipe the main agent follows. Tiny: hand the path and intent to the worker, return the worker's text.
+- `agents/image-worker.md`  the Haiku subagent that actually looks at the image and owns a small markdown cache.
+
+The cache lives at `~/.claude/cache/image-memory/<id>.md`, one file per unique image (id is sha256 of bytes). Each file has a `## profile` block written once (text, summary, kind, dims, elements) and a `## answers` log appended over time. Common questions get answered straight from the profile without re-reading the image. There is no index file. The cache directory is its own index.
+
+For full design notes including the why behind each choice, see `CLAUDE.md`.
 
 ## Evals
 
-See `evals/MANIFEST.md`. The eval loop is itself agent driven: a Claude Code session walks the test rows, invokes `Image(path, intent)`, and writes results to `evals/runs/<timestamp>.md`. One of the loops uses `agent-browser` to take a fresh screenshot of an unfamiliar page, then asks the skill about it, exercising the skill against truly novel input.
+`evals/MANIFEST.md` lists test scenarios across screenshot styles, paraphrased intents, novel questions, two image comparisons, and an end to end loop using `agent-browser` to capture a fresh page and ask the skill about it. Runs are logged under `evals/runs/`.
 
-## Status
+Latest observed numbers:
 
-End to end working. Cache populated via Haiku worker, cross image index maintained, warm paraphrased intents served without re-reading the image, agent-browser capture verified end to end against an unfamiliar live page. Latest run log under `evals/runs/`.
+| path | tool calls | image read by worker |
+|---|---|---|
+| cold (first question on a new image) | 6 to 10 | yes |
+| warm (intent maps to a profile field) | 4 to 6 | no |
+| warm (exact prior intent repeated) | 4 to 6 | no |
+| novel (new question on cached image) | 14 to 16 | yes |
 
-Observed on the current run set:
-
-| path | tools used | image read by worker |
-|------|-----------|----------------------|
-| cold (first ever question on an image) | 8 to 10 | yes |
-| warm (paraphrase that maps to a profile field) | 4 to 6 | no |
-| warm (exact prior intent) | 4 to 6 | no |
-| novel (new question that needs new visual work) | 14 to 16 | yes |
-
-Open follow ups: chart and photo style coverage, two image diff coverage, embedding based intent paraphrase matching, eviction policy.
+Open follow ups: chart and photo coverage, two image diff coverage, embedding based intent matching, cache eviction policy.
