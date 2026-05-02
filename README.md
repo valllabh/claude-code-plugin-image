@@ -47,26 +47,27 @@ Markdown only. Two pieces: an `index.md` for cross image lookup, and one `<sha>.
 ```
 ~/.claude/cache/image-memory/
   index.md             one row per image
-  <sha256>.md          per image memory
+  <id>.md              per image memory (id is sha256 of bytes by default)
 ```
 
 `index.md` is a single markdown table. Linear scan is fine at the scales this cache operates at (hundreds, low thousands of images).
 
 ```
-| sha | sources | kind | dims | created | tags |
-|-----|---------|------|------|---------|------|
-| ... | ...     | ...  | ...  | ...     | ...  |
+| id | sources | kind | dims | created | tags |
+|----|---------|------|------|---------|------|
+| ...| ...     | ...  | ...  | ...     | ...  |
 ```
 
 Per image file has a fixed shape:
 
 ```
 ---
-source(s):
+id: <sha256 hex>
+sources:
   - /absolute/path/one.png
   - /absolute/path/two.png
-sha256: ...
-created: ...
+created: <iso 8601 utc>
+id_method: <only set when worker fell back from python helper>
 ---
 
 ## profile         (written once on first touch, never rewritten)
@@ -84,13 +85,14 @@ elements: short list of salient regions
 <answer>
 ```
 
-Routing on a new call:
+Routing on a new call (executed by the `image-worker` subagent, not the main agent):
 
-1. Hash the image bytes. Add the path to `sources` in `index.md` if new.
-2. If the `<sha>.md` file is missing or has no `## profile` section, spawn the worker once to populate `## profile`. Pays for itself across all future questions on this image.
-3. Try to answer the intent from `## profile`. Most "what text", "what kind", "summarize" intents resolve here with no model call.
-4. Else search `## answers` for a normalized match on the intent string. Hook for embeddings later.
-5. Else spawn the worker. Append a new `### intent` block to `## answers`.
+1. Compute the id via `scripts/image_cache.py id <path>`. Falls back to `sha256sum`, `shasum`, or `node` if Python is missing.
+2. Register the path in `index.md` via `image_cache.py register`. Same bytes seen at a new path just appends to the existing row's sources cell.
+3. If the `<id>.md` file is missing or has no `## profile` section, read the image once and write the canonical profile.
+4. Try to answer the intent from `## profile`. Most "what text", "what kind", "summarize", "what dims" intents resolve here with no model call.
+5. Else search `## answers` for a normalized substring match on the intent string. Hook for embeddings later.
+6. Else read the image, answer, and append a new `### intent` block to `## answers`.
 
 Why this shape:
 
@@ -138,4 +140,15 @@ See `evals/MANIFEST.md`. The eval loop is itself agent driven: a Claude Code ses
 
 ## Status
 
-End to end working with cache. Cold and warm paths verified on real screenshots. Iterating on prompt clarity and eval coverage.
+End to end working. Cache populated via Haiku worker, cross image index maintained, warm paraphrased intents served without re-reading the image, agent-browser capture verified end to end against an unfamiliar live page. Latest run log under `evals/runs/`.
+
+Observed on the current run set:
+
+| path | tools used | image read by worker |
+|------|-----------|----------------------|
+| cold (first ever question on an image) | 8 to 10 | yes |
+| warm (paraphrase that maps to a profile field) | 4 to 6 | no |
+| warm (exact prior intent) | 4 to 6 | no |
+| novel (new question that needs new visual work) | 14 to 16 | yes |
+
+Open follow ups: chart and photo style coverage, two image diff coverage, embedding based intent paraphrase matching, eviction policy.
