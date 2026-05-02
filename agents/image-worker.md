@@ -13,6 +13,8 @@ You exist so the calling agent never has to load image pixels. You read the imag
 path:      <one or two absolute paths>
 intent:    <free form>
 cache_dir: <usually ~/.claude/cache/image-memory>
+max_age:   <optional, e.g. 1h, 7d, 30d, never. Default: never.>
+force:     <optional, true to bypass cache and regenerate. Default: false.>
 ```
 
 ## Cache file
@@ -35,9 +37,11 @@ id: <sha256>
 sources:
   - <absolute path>
 created: <iso utc, from `date -u +%Y-%m-%dT%H:%M:%SZ`>
+last_accessed: <iso utc, updated on every touch>
 ---
 
 ## profile
+ts: <iso utc when profile was written>
 text:     <every visible word, reading order>
 summary:  <one short paragraph>
 kind:     screenshot | photo | diagram | chart | mockup | document | other
@@ -46,22 +50,26 @@ elements: <bulleted regions / components>
 
 ## answers
 ### intent: <verbatim intent>
+ts: <iso utc when answer was generated>
 <answer>
 ```
 
 ## Routing
 
 1. Compute id. Cache file = `<cache_dir>/<id>.md`.
-2. If file missing or no `## profile`: mkdir, Read image, fill profile, answer intent, write file. Return answer.
-3. If file exists but path not in `sources:`: append the new path.
-4. If intent maps to a profile field, return that field. No image Read.
+2. If `force: true`, treat as cache miss, jump to step 7.
+3. If file missing or no `## profile`: mkdir, Read image, fill profile, answer intent, write file with `ts:` on profile and answer. Return answer.
+4. If file exists but path not in `sources:`: append the new path.
+5. If intent maps to a profile field AND profile `ts:` is within `max_age` (or `max_age` is `never` / unset), return that field. Update `last_accessed:`. No image Read.
    - text / OCR / read words / extract text → `text`
    - summarize / describe / what is this → `summary`
    - kind / type → `kind`
    - dimensions / size → `dims`
    - elements / components / regions → `elements`
-5. Else if a normalized substring match against an existing `### intent:` heading exists, return that block.
-6. Else: Read image, answer, append a new `### intent:` block. Return answer.
+6. Else if a normalized substring match against an existing `### intent:` heading exists AND its `ts:` is within `max_age`, return that block. Update `last_accessed:`.
+7. Else (cache miss or stale): Read image, answer, append a new `### intent:` block with `ts:` (or replace the stale one). Return answer.
+
+`max_age` parsing: accept `Nh` (hours), `Nd` (days), `never`, or absent. `never` and absent both mean no expiry. An entry is stale when `now - ts > max_age`.
 
 ## Two image comparisons
 

@@ -19,7 +19,11 @@ Spawn `image-worker` with one message:
 path:      <absolute path, or two paths separated by newline for diff>
 intent:    <user request, verbatim, do not paraphrase>
 cache_dir: ~/.claude/cache/image-memory
+max_age:   <optional. e.g. 1h, 7d, never. Default: never.>
+force:     <optional. true to bypass cache. Default: false.>
 ```
+
+Pass `max_age` when the user's question is time sensitive (e.g. asking about a dashboard screenshot of live data, or after a model upgrade where you want fresh answers). Pass `force: true` when the user explicitly says "re-look" or you suspect the cached answer is wrong. Otherwise omit both and the cache lives forever, which is correct for static images like screenshots.
 
 Return the worker's text to the user as is. No summarizing, no prefix, no annotation.
 

@@ -30,6 +30,8 @@ Makefile                         link, unlink
 - Worker model is Haiku. Do not switch to Sonnet or Opus without a written reason.
 - The cache is markdown only. One file per image at `<id>.md` under `~/.claude/cache/image-memory/`. No index file. The cache directory IS the index. The file's own frontmatter lists every path alias for the same bytes.
 - Each `<id>.md` has two sections. `## profile` is written once on first touch and never rewritten. `## answers` is append only.
+- Every entry carries a `ts:` timestamp. The frontmatter tracks `last_accessed:`. These exist so the skill can reason about freshness, not for analytics.
+- The skill accepts `max_age:` and `force:`. Default is no expiry. Invalidation is opt in, not automatic, because most cached images are static.
 - Lookups consult `## profile` first (cheap, no model call), then `## answers`, then read the image as a last resort.
 - Do not introduce an index file. If cross image queries become a real need, add it then. Premature now.
 - Two image comparisons share one memory file, keyed off the first image. Reference the second image by path inside the answer.
