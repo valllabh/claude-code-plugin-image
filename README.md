@@ -110,6 +110,33 @@ Why this shape:
 - The main agent context window is preserved for the actual coding task.
 - The cache compounds value across sessions, not just within one.
 
+## When To Use It vs Just `Read`
+
+The plugin is only worth invoking when the win is real. Concretely:
+
+| approach | tokens added to MAIN context per image | persists in main context |
+|----------|----------------------------------------|--------------------------|
+| `Read` image directly | ~1000 to 1700 (vision tier dependent) | yes, for the rest of the session |
+| `Image(path, intent)` cold | ~50 to 300 (the text answer only) | yes, but cheap text |
+| `Image(path, intent)` warm cache hit | ~50 to 300 | yes, but cheap text |
+
+The worker has its own context overhead per call (~20 to 25 thousand tokens of system prompt and tool definitions, billed separately on Haiku). That cost is real but isolated from the main agent.
+
+Use the plugin when:
+
+- Multiple images in one session.
+- One image with multiple questions over time.
+- Long sessions where main context is the scarce resource.
+- The user needs text understanding, not pixel precise reasoning.
+
+Skip the plugin when:
+
+- Single image, single throwaway question, short session.
+- The user explicitly asks you to look at the image yourself.
+- The task needs sub pixel localization or detailed visual judgement that a text answer cannot capture.
+
+Net rule of thumb: at two or more images in a session, the plugin pays for itself. At ten images, it is the difference between finishing the task and hitting context limits.
+
 ## Install
 
 Requires Claude Code. macOS, Linux, or Windows (WSL or Git Bash). Worker uses any of `sha256sum`, `shasum`, or `python3` for content hashing, so at least one of those needs to be on PATH. All three ship by default on the supported platforms.
